@@ -9,16 +9,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub import try_to_load_from_cache
-from parakeet_mlx import from_pretrained
+import onnx_asr
+from dataclasses import dataclass
 
-MODEL_ID = "mlx-community/parakeet-tdt-0.6b-v3"
-
-
-def is_model_cached() -> bool:
-    """Check if model is already downloaded."""
-    result = try_to_load_from_cache(MODEL_ID, "config.json")
-    return isinstance(result, str) and Path(result).exists()
+MODEL_ID = "nemo-parakeet-tdt-0.6b-v3"
 
 EXTENSION_MAP = {
     "txt": ".txt",
@@ -26,6 +20,31 @@ EXTENSION_MAP = {
     "vtt": ".vtt",
     "json": ".json",
 }
+
+
+@dataclass
+class Sentence:
+    text: str
+    start: float
+    end: float
+
+@dataclass
+class TranscriptionResult:
+    text: str
+    sentences: list[Sentence]
+
+
+def adapt_result(raw_result) -> TranscriptionResult:
+    """Adapt onnx-asr VAD output to match expected result format."""
+    segments = list(raw_result)
+    if not segments:
+        return TranscriptionResult(text="", sentences=[])
+    sentences = [
+        Sentence(text=seg.text.strip(), start=seg.start, end=seg.end)
+        for seg in segments
+    ]
+    full_text = " ".join(s.text for s in sentences)
+    return TranscriptionResult(text=full_text, sentences=sentences)
 
 
 def expand_paths(patterns: list[str]) -> list[Path]:
@@ -72,12 +91,13 @@ def get_output_path(input_path: Path, output: str | None, fmt: str) -> Path:
 
 
 def transcribe(input_path: Path, output_path: Path, fmt: str, quiet: bool, model: Any) -> bool:
-    """Run transcription using parakeet-mlx."""
+    """Run transcription using onnx-asr."""
     try:
         if not quiet:
             print(f"Processing {input_path.name}...", file=sys.stderr)
 
-        result = model.transcribe(str(input_path))
+        raw_result = model.recognize(str(input_path))
+        result = adapt_result(raw_result)
     except Exception as e:
         if not quiet:
             print(f"Error: Transcription failed for {input_path.name}: {e}", file=sys.stderr)
@@ -185,9 +205,10 @@ def main():
         sys.exit(1)
 
     # Load model once for batch processing
-    if not args.quiet and not is_model_cached():
-        print(f"Model not found locally. Downloading {MODEL_ID}...", file=sys.stderr)
-    model = from_pretrained(MODEL_ID)
+    if not args.quiet:
+        print("Loading model...", file=sys.stderr)
+    vad = onnx_asr.load_vad("silero")
+    model = onnx_asr.load_model(MODEL_ID).with_vad(vad)
 
     success = True
     for input_path in input_paths:

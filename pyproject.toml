@@ -1,14 +1,19 @@
 [project]
 name = "stt-cli"
-version = "1.0.0"
-description = "Speech-to-text CLI tool for Apple Silicon Macs"
+version = "2.0.0"
+description = "Speech-to-text CLI tool"
 requires-python = ">=3.10"
 dependencies = [
-    "parakeet-mlx>=0.3.0",
+    "onnx-asr[hub]>=0.10.0",
+    "onnxruntime>=1.24.2",
 ]
 classifiers = [
-    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
 ]
+
+[project.optional-dependencies]
+cuda = ["onnxruntime-gpu>=1.24.2"]
 
 [project.scripts]
 stt = "stt:main"

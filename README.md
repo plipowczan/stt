@@ -1,6 +1,6 @@
-# stt - fast speech-to-text CLI for Apple Silicon 
+# stt - fast speech-to-text CLI
 
-> [!NOTE]  
+> [!NOTE]
 > Also: Optimised for agentic usage with Claude Code, Codex, Open Code and more!
 
 # Supported languages
@@ -11,25 +11,31 @@ Bulgarian, Croatian, Czech, Danish, Dutch, Estonian, Finnish, French, German, Gr
 
 | Benchmark | Audio Total Duration | Processing Time | Speed Ratio |
 |-----------|----------------|-----------------|-------------|
-| First run (model load) | any | longer, 1.2GB to download | - |
-| Single file (long) | 10m 39s | 8.19s | **78x real-time** |
-| Single file (short) | 25s | 3.55s | **7x real-time** |
-| Batch 100x (short) | 41m 40s | 19.79s | **126x real-time** |
+| First run (model load) | any | longer, ~200MB to download | - |
+| Single file (long) | 10m 39s | hardware-dependent | - |
+| Single file (short) | 25s | hardware-dependent | - |
+| Batch 100x (short) | 41m 40s | hardware-dependent | - |
 
 **Notes:**
-- Tested on Macbook Pro M4 Max, 128GB RAM
+- Performance varies by hardware. GPU acceleration available with CUDA.
 
 ## Requirements
 
-- macOS with Apple Silicon (M1/M2/M3/M4)
+- Windows or Linux
 - Python 3.10+
-- ffmpeg (`brew install ffmpeg`)
-- uv (`brew install uv` or [see official docs](https://docs.astral.sh/uv/getting-started/installation/))
+- ffmpeg (`winget install ffmpeg` on Windows, `apt install ffmpeg` on Linux)
+- uv ([see official docs](https://docs.astral.sh/uv/getting-started/installation/))
 
 ## Installation
 
+**CPU only:**
 ```bash
-uv pip install --system git+https://github.com/drogaprogramisty/stt
+uv pip install --system git+https://github.com/plipowczan/stt
+```
+
+**With CUDA GPU acceleration:**
+```bash
+uv pip install --system "stt-cli[cuda] @ git+https://github.com/plipowczan/stt"
 ```
 
 ## Output Formats
