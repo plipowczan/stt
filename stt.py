@@ -5,7 +5,12 @@ from __future__ import annotations
 
 import argparse
 import glob
+import re
+import shutil
+import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +50,24 @@ def adapt_result(raw_result) -> TranscriptionResult:
     ]
     full_text = " ".join(s.text for s in sentences)
     return TranscriptionResult(text=full_text, sentences=sentences)
+
+
+def load_model_with_retry(model_id: str, quiet: bool):
+    """Load the ASR model, clearing a corrupt cache snapshot and retrying once on failure."""
+    try:
+        return onnx_asr.load_model(model_id)
+    except Exception as e:
+        match = re.search(r'"([^"]*[/\\]snapshots[/\\][^"]+)"', str(e))
+        if match:
+            bad_path = Path(match.group(1))
+            for candidate in [bad_path, *bad_path.parents]:
+                if candidate.parent.name == "snapshots":
+                    if candidate.exists():
+                        if not quiet:
+                            print("Corrupt model cache detected, clearing and re-downloading...", file=sys.stderr)
+                        shutil.rmtree(candidate)
+                    return onnx_asr.load_model(model_id)
+        raise
 
 
 def expand_paths(patterns: list[str]) -> list[Path]:
@@ -90,13 +113,34 @@ def get_output_path(input_path: Path, output: str | None, fmt: str) -> Path:
     return get_unique_output_path(output_path)
 
 
+@contextmanager
+def as_wav(input_path: Path):
+    """Yield a 16 kHz mono WAV version of input_path, converting via ffmpeg if needed."""
+    if input_path.suffix.lower() == ".wav":
+        yield input_path
+        return
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(input_path), "-ar", "16000", "-ac", "1", "-f", "wav", str(tmp_path)],
+            check=True,
+            capture_output=True,
+        )
+        yield tmp_path
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
 def transcribe(input_path: Path, output_path: Path, fmt: str, quiet: bool, model: Any) -> bool:
     """Run transcription using onnx-asr."""
     try:
         if not quiet:
             print(f"Processing {input_path.name}...", file=sys.stderr)
 
-        raw_result = model.recognize(str(input_path))
+        with as_wav(input_path) as wav_path:
+            raw_result = model.recognize(str(wav_path))
         result = adapt_result(raw_result)
     except Exception as e:
         if not quiet:
@@ -208,7 +252,7 @@ def main():
     if not args.quiet:
         print("Loading model...", file=sys.stderr)
     vad = onnx_asr.load_vad("silero")
-    model = onnx_asr.load_model(MODEL_ID).with_vad(vad)
+    model = load_model_with_retry(MODEL_ID, args.quiet).with_vad(vad)
 
     success = True
     for input_path in input_paths:

@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(time stt:*)"
+      "Bash(time stt:*)",
+      "WebSearch"
     ]
   }
 }
